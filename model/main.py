@@ -3,6 +3,9 @@ from telegram_token import token
 import numpy as np
 from PIL import Image
 from io import BytesIO
+from array import array
+import os
+import io
 
 
 model = StyleTransferModel()
@@ -30,7 +33,7 @@ def send_prediction_on_photo(bot, update):
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
 
-        output = model.transfer_style(content_image_stream, content_image_stream, style_image_stream)
+        output = model.transfer_style(content_image_stream, style_image_stream)
 
         # теперь отправим назад фото
         output_stream = BytesIO()
