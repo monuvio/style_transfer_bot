@@ -220,6 +220,5 @@ class Normalization(nn.Module):
             # normalize img
             return (img - self.mean) / self.std
 
-input_img = content_img.clone()
 
 

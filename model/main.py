@@ -1,4 +1,4 @@
-from model import StyleTransferModel
+from modelsus import StyleTransferModel
 from telegram_token import token
 import numpy as np
 from PIL import Image
