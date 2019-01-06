@@ -15,17 +15,15 @@ import torchvision.models as models
 
 import copy
 
+
 class StyleTransferModel:
     def __init__(self):
         # Сюда необходимо перенести всю иницализацию, вроде загрузки сверточной сети и т.д.
-        self.content_layers_default = ['conv_4']
-        self.style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-        content_layers_default = self.content_layers_default
-        style_layers_default = self.style_layers_default
+        pass
       
     def get_style_model_and_losses(self, style_img, content_img):
-        content_layers = self.content_layers_default
-        style_layers = self.style_layers_default
+        content_layers = ['conv_4']
+        style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
         cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
 
@@ -95,8 +93,8 @@ class StyleTransferModel:
         normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
         cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
-        model, style_losses, content_losses = self.get_style_model_and_losses(style_img, content_img)
-        optimizer = self.get_input_optimizer(input_img)
+        model, style_losses, content_losses = StyleTransferModel.get_style_model_and_losses(style_img, style_img, content_img)
+        optimizer = StyleTransferModel.get_input_optimizer(input_img, input_img)
 
         print('Optimizing..')
         num_steps=500
@@ -183,44 +181,6 @@ class StyleTransferModel:
         image = loader(image).unsqueeze(0)
         return image.to(device, torch.float)
 
-imsize = 128  
-
-loader = transforms.Compose([
-    transforms.Resize(imsize),  # нормируем размер изображения
-    transforms.CenterCrop(imsize),
-    transforms.ToTensor()])  # превращаем в удобный формат
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-def image_loader(image_name):
-    image = Image.open(image_name)
-    image = loader(image).unsqueeze(0)
-    return image.to(device, torch.float)
-
-
-style_img = image_loader("picasso.jpg")# as well as here
-content_img = image_loader("lisa.jpg")#измените путь на тот который у вас.
-
-unloader = transforms.ToPILImage() # тензор в кратинку  
-
-plt.ion() 
-
-def imshow(tensor, title=None):
-    image = tensor.cpu().clone()   
-    image = image.squeeze(0)      # функция для отрисовки изображения
-    image = unloader(image)
-    plt.imshow(image)
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001) 
-
-# отрисовка
-
-plt.figure()
-imshow(style_img, title='Style Image')
-
-plt.figure()
-imshow(content_img, title='Content Image')
-
 class ContentLoss(nn.Module):
 
         def __init__(self, target,):
@@ -239,11 +199,11 @@ class ContentLoss(nn.Module):
 class StyleLoss(nn.Module):
         def __init__(self, target_feature):
             super(StyleLoss, self).__init__()
-            self.target = gram_matrix(target_feature).detach()
+            self.target = StyleTransferModel.gram_matrix(target_feature, target_feature).detach()
             self.loss = F.mse_loss(self.target, self.target)# to initialize with something
 
         def forward(self, input):
-            G = gram_matrix(input)
+            G = StyleTransferModel.gram_matrix(input, input)
             self.loss = F.mse_loss(G, self.target)
             return input
 
@@ -261,18 +221,5 @@ class Normalization(nn.Module):
             return (img - self.mean) / self.std
 
 input_img = content_img.clone()
-# if you want to use white noise instead uncomment the below line:
-# input_img = torch.randn(content_img.data.size(), device=device)
 
-# add the original input image to the figure:
-plt.figure()
-imshow(input_img, title='Input Image')
-output = StyleTransferModel.transfer_style(content_img, style_img, input_img)
-
-plt.figure()
-imshow(output, title='Output Image')
-#plt.imsave(output, 'output.png')
-# sphinx_gallery_thumbnail_number = 4
-plt.ioff()
-plt.show()
 
