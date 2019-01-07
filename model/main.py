@@ -6,6 +6,10 @@ from io import BytesIO
 from array import array
 import os
 import io
+import torchvision.transforms.functional as F
+import torchvision.transforms as transforms
+import torch
+
 
 
 model = StyleTransferModel()
@@ -37,6 +41,9 @@ def send_prediction_on_photo(bot, update):
 
         # теперь отправим назад фото
         output_stream = BytesIO()
+        unloader = transforms.ToPILImage()
+        output = torch.reshape(output, [3, 128, 128])
+        output = unloader(output)
         output.save(output_stream, format='PNG')
         output_stream.seek(0)
         bot.send_photo(chat_id, photo=output_stream)

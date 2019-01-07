@@ -90,27 +90,29 @@ class StyleTransferModel:
     def transfer_style(self, content_img, style_img):
         """Run the style transfer."""
         print('Building the style transfer model..')
+        content_img = StyleTransferModel.process_image(content_img, content_img)
+        style_img = StyleTransferModel.process_image(style_img, style_img)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
         normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
         cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
         model, style_losses, content_losses = StyleTransferModel.get_style_model_and_losses(style_img, style_img, content_img)
-        optimizer = StyleTransferModel.get_input_optimizer(input_img, input_img)
+        optimizer = StyleTransferModel.get_input_optimizer(content_img, content_img)
 
         print('Optimizing..')
-        num_steps=500
+        num_steps=100
         run = [0]
         while run[0] <= num_steps:
 
             def closure():
                 # correct the values 
                 # это для того, чтобы значения тензора картинки не выходили за пределы [0;1]
-                input_img.data.clamp_(0, 1)
+                content_img.data.clamp_(0, 1)
 
                 optimizer.zero_grad()
 
-                model(input_img)
+                model(content_img)
 
                 style_score = 0
                 content_score = 0
@@ -141,9 +143,9 @@ class StyleTransferModel:
             optimizer.step(closure)
 
         # a last correction...
-        input_img.data.clamp_(0, 1)
+        content_img.data.clamp_(0, 1)
 
-        return input_img
+        return content_img
     
     def get_input_optimizer(self, input_img):
         # this line to show that input is a parameter that requires a gradient
