@@ -18,41 +18,31 @@ import copy
 
 class StyleTransferModel:
     def __init__(self):
-        # Сюда необходимо перенести всю иницализацию, вроде загрузки сверточной сети и т.д.
-        pass
+        device = 'cpu'
+        imsize = 128
       
     def get_style_model_and_losses(self, style_img, content_img):
         content_layers = ['conv_4']
         style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
 
-        # normalization module
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
         normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
         normalization = Normalization(normalization_mean, normalization_std).to(device)
 
-        # just in order to have an iterable access to or list of content/syle
-        # losses
         content_losses = []
         style_losses = []
 
-        # assuming that cnn is a nn.Sequential, so we make a new nn.Sequential
-        # to put in modules that are supposed to be activated sequentially
         model = nn.Sequential(normalization)
 
-        i = 0  # increment every time we see a conv
+        i = 0  
         for layer in cnn.children():
             if isinstance(layer, nn.Conv2d):
                 i += 1
                 name = 'conv_{}'.format(i)
             elif isinstance(layer, nn.ReLU):
                 name = 'relu_{}'.format(i)
-                # The in-place version doesn't play very nicely with the ContentLoss
-                # and StyleLoss we insert below. So we replace with out-of-place
-                # ones here.
-                #Переопределим relu уровень
                 layer = nn.ReLU(inplace=False)
             elif isinstance(layer, nn.MaxPool2d):
                 name = 'pool_{}'.format(i)
@@ -64,21 +54,17 @@ class StyleTransferModel:
             model.add_module(name, layer)
 
             if name in content_layers:
-                # add content loss:
                 target = model(content_img).detach()
                 content_loss = ContentLoss(target)
                 model.add_module("content_loss_{}".format(i), content_loss)
                 content_losses.append(content_loss)
 
             if name in style_layers:
-                # add style loss:
                 target_feature = model(style_img).detach()
                 style_loss = StyleLoss(target_feature)
                 model.add_module("style_loss_{}".format(i), style_loss)
                 style_losses.append(style_loss)
-
-        # now we trim off the layers after the last content and style losses
-        #выбрасываем все уровни после последенего styel loss или content loss
+                
         for i in range(len(model) - 1, -1, -1):
             if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
                 break
@@ -88,17 +74,12 @@ class StyleTransferModel:
         return model, style_losses, content_losses
       
     def transfer_style(self, content_img, style_img):
-        """Run the style transfer."""
         print('Building the style transfer model..')
-        content_img = StyleTransferModel.process_image(content_img, content_img)
-        style_img = StyleTransferModel.process_image(style_img, style_img)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
         normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-        cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
         model, style_losses, content_losses = StyleTransferModel.get_style_model_and_losses(style_img, style_img, content_img)
-        optimizer = StyleTransferModel.get_input_optimizer(content_img, content_img)
+        optimizer = StyleTransferModel.get_input_optimizer(input_img, input_img)
 
         print('Optimizing..')
         num_steps=100
@@ -106,13 +87,11 @@ class StyleTransferModel:
         while run[0] <= num_steps:
 
             def closure():
-                # correct the values 
-                # это для того, чтобы значения тензора картинки не выходили за пределы [0;1]
-                content_img.data.clamp_(0, 1)
+                input_img.data.clamp_(0, 1)
 
                 optimizer.zero_grad()
 
-                model(content_img)
+                model(input_img)
 
                 style_score = 0
                 content_score = 0
@@ -122,7 +101,6 @@ class StyleTransferModel:
                 for cl in content_losses:
                     content_score += cl.loss
                 
-                #взвешивание ощибки
                 content_weight=1
                 style_weight=100000
                 style_score *= style_weight
@@ -142,44 +120,29 @@ class StyleTransferModel:
 
             optimizer.step(closure)
 
-        # a last correction...
-        content_img.data.clamp_(0, 1)
+        input_img.data.clamp_(0, 1)
 
-        return content_img
+        return input_img
     
     def get_input_optimizer(self, input_img):
-        # this line to show that input is a parameter that requires a gradient
-        #добоваляет содержимое тензора катринки в список изменяемых оптимизатором параметров
         optimizer = optim.LBFGS([input_img.requires_grad_()]) 
         return optimizer
       
     def gram_matrix(self, input):
-        batch_size , h, w, f_map_num = input.size()  # batch size(=1)
-        # b=number of feature maps
-        # (h,w)=dimensions of a feature map (N=h*w)
+        batch_size , h, w, f_map_num = input.size() 
 
-        features = input.view(batch_size * h, w * f_map_num)  # resise F_XL into \hat F_XL
+        features = input.view(batch_size * h, w * f_map_num) 
 
-        G = torch.mm(features, features.t())  # compute the gram product
+        G = torch.mm(features, features.t()) 
 
-        # we 'normalize' the values of the gram matrix
-        # by dividing by the number of element in each feature maps.
+
         return G.div(batch_size * h * w * f_map_num)
 
-    # В run_style_transfer используется много внешних функций, их можно добавить как функции класса
-    # Если понятно, что функция является служебной и снаружи использоваться не должна, то перед именем функции
-    # принято ставить _ (выглядит это так: def _foo() )
-    # ниже пример того, как переносить методы
     def process_image(self, img_stream):
-        # TODO размер картинки, device и трансформации не меняются в течении всей работы модели,
-        # TODO поэтому их нужно перенести в конструктор!
-        imsize = 128
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(device)
         loader = transforms.Compose([
-            transforms.Resize(imsize),  # нормируем размер изображения
+            transforms.Resize(imsize), 
             transforms.CenterCrop(imsize),
-            transforms.ToTensor()])  # превращаем в удобный формат
+            transforms.ToTensor()]) 
 
         image = Image.open(img_stream)
         image = loader(image).unsqueeze(0)
