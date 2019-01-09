@@ -12,13 +12,23 @@ main_menu = {
 }
 
 choose_net_variation = {
-    "RU": "Выбери, какая сеть будет обрабатывать твои изображения",
-    "EN": "Choose neural net variation"
+    "RU": "Нейросетевой перенос стиля",
+    "EN": "Neural style transfer"
 }
 
 view_about = {
     "RU": "О боте",
     "EN": "About"
+}
+
+content_image = {
+    "RU": "Отлично, теперь загрузи картинку, с которой нейросеть возьмет стиль.",
+    "EN": "Great, now upload image with style. "
+}
+
+style_image = {
+    "RU": "Теперь подожди немного, сеть обрабатывает изображение.",
+    "EN": "Now wait until neural net end his task."
 }
 
 back2menu = {
@@ -32,19 +42,15 @@ goodbye = {
 }
 
 about_info = {
-    "RU": "Soy un chatbot que ayuda ante las situaciones de desastre. \
-Envíame un reporte con tu localización para alimentar una base de datos \
-y así poder ubicarte geográficamente y poder enviarte ayuda. \n\n\
-Me encunetro en una versión alpha desarrollada por @RodolfoFerro.",
-    "EN": "I am a chatbot that helps in disaster situations. \
-Send me a report with your geolocation to feed a database an be able to \
-geo-locate you in order to send some help. \n\n\
-I'm in an alpha version developed by @RodolfoFerro."
+    "RU": "Чатбот для переноса стилей##TODO \n\n\
+",
+    "EN": "Chatbot for style transfer##TODO \n\n\
+"
 }
 
 neural_net = {
-    "RU": "Выбери, какой нейросетью ты будешь пользоваться.",
-    "EN": "Choose neural network for styling"
+    "RU": "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект, затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.",
+    "EN": "Upload 2 images: from the first image neural net will get the object, from the second neural net will get style and set style on the first image."
 }
 
 help_info = {

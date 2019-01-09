@@ -35,7 +35,7 @@ def start(bot, update):
     keyboard = [['RU', 'EN']]
 
     # Create initial message:
-    message = "Hey, I'm DisAtBot! / Привет! Я бот для переноса стилей! \n\n\
+    message = "Hey, 'Style transfer bot! / Привет! Я бот для переноса стилей! \n\n\
 Please select a language to start. / Пожалуйста, выбери язык, чтобы начать."
 				
 
@@ -85,7 +85,7 @@ def set_state(bot, update):
     user = update.message.from_user
     if update.message.text == choose_net_variation[LANG]:
         STATE = NEURO
-        neural_set(bot, update)
+        send_prediction_on_photo(bot, update)
         return MENU
     elif update.message.text == view_about[LANG]:
         STATE = ABOUT
@@ -95,15 +95,47 @@ def set_state(bot, update):
         STATE = MENU
         return MENU
 		
-def neural_set(bot, update):
+model = StyleTransferModel()
+first_image_file = {}
+		
+def send_prediction_on_photo(bot, update):
     """
-    Setting variation of neural net and start style transfer session
+    Neural networks should work :)
     """
-    user = update.message.from_user
-    logger.info("{} choose neural net.".format(user.first_name))
     update.message.reply_text(neural_net[LANG])
+    chat_id = update.message.chat_id
+    print("Got image from {}".format(chat_id))
+
+    image_info = update.message.photo[-1]
+    image_file = bot.get_file(image_info)
+
+    if chat_id in first_image_file:
+
+        content_image_stream = BytesIO()
+        first_image_file[chat_id].download(out=content_image_stream)
+        bot.send_message(chat_id=update.message.chat_id, text=content_image[LANG])
+        del first_image_file[chat_id]
+
+        style_image_stream = BytesIO()
+        image_file.download(out=style_image_stream)
+        bot.send_message(chat_id=update.message.chat_id, text=style_image[LANG])
+
+        output = model.transfer_style(content_image_stream, style_image_stream)
+
+        output_stream = BytesIO()
+        unloader = transforms.ToPILImage()
+        output = torch.reshape(output, [3, 128, 128])
+        output = unloader(output)
+        output.save(output_stream, format='PNG')
+        output_stream.seek(0)
+        bot.send_photo(chat_id, photo=output_stream)
+        print("Sent Photo to user")
+    else:
+        first_image_file[chat_id] = image_file
     bot.send_message(chat_id=update.message.chat_id, text=back2menu[LANG])
     return
+		
+
 	
 def about_bot(bot, update):
     """
@@ -163,6 +195,8 @@ def main():
             SET_LANG: [RegexHandler('^(RU|EN)$', set_lang)],
 
             MENU: [CommandHandler('menu', menu)],
+			
+			NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
 
             SET_STAT: [RegexHandler(
                         '^({}|{})$'.format(
@@ -192,4 +226,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print('ready')
     main()
