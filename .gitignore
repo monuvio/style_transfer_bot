@@ -6,5 +6,7 @@ telegram_bot/telegram_token.py
 model/telegram_token.py
 Guide.ipynb
 cmd.bat
+
 **/.idea
+
 **/__pycache__
