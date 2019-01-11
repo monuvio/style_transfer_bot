@@ -35,7 +35,7 @@ def start(bot, update):
     keyboard = [['RU', 'EN']]
 
     # Create initial message:
-    message = "Hey, 'Style transfer bot! / Привет! Я бот для переноса стилей! \n\n\
+    message = "Hey, i'm 'Style transfer bot! / Привет! Я бот для переноса стилей! \n\n\
 Please select a language to start. / Пожалуйста, выбери язык, чтобы начать."
 				
 
@@ -85,7 +85,7 @@ def set_state(bot, update):
     user = update.message.from_user
     if update.message.text == choose_net_variation[LANG]:
         STATE = NEURO
-        send_prediction_on_photo(bot, update)
+        neural_set(bot, update)
         return MENU
     elif update.message.text == view_about[LANG]:
         STATE = ABOUT
@@ -97,14 +97,13 @@ def set_state(bot, update):
 		
 model = StyleTransferModel()
 first_image_file = {}
-		
+
 def send_prediction_on_photo(bot, update):
     """
     Neural networks should work :)
     """
-    update.message.reply_text(neural_net[LANG])
-    chat_id = update.message.chat_id
-    print("Got image from {}".format(chat_id))
+    user = update.message.from_user
+    logger.info("Got image from {}".format(user.first_name))
 
     image_info = update.message.photo[-1]
     image_file = bot.get_file(image_info)
@@ -113,12 +112,10 @@ def send_prediction_on_photo(bot, update):
 
         content_image_stream = BytesIO()
         first_image_file[chat_id].download(out=content_image_stream)
-        bot.send_message(chat_id=update.message.chat_id, text=content_image[LANG])
         del first_image_file[chat_id]
 
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
-        bot.send_message(chat_id=update.message.chat_id, text=style_image[LANG])
 
         output = model.transfer_style(content_image_stream, style_image_stream)
 
@@ -132,11 +129,17 @@ def send_prediction_on_photo(bot, update):
         print("Sent Photo to user")
     else:
         first_image_file[chat_id] = image_file
-    bot.send_message(chat_id=update.message.chat_id, text=back2menu[LANG])
     return
 		
-
-	
+def neural_set(bot, update):
+    """
+    Redirecting on styling function
+    """
+    user = update.message.from_user
+    logger.info("Neural style requested by {}.".format(user.first_name))
+    update.message.reply_text(neural_net[LANG])
+    return NEURO
+    	
 def about_bot(bot, update):
     """
     About function. Displays info about DisAtBot.

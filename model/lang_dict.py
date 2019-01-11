@@ -7,8 +7,8 @@ How can I help you? A list of options can be found with the \
 }
 
 main_menu = {
-    "RU": "Пожайлуйста, выбери одну из функций ниже",
-    "EN": "Please select an option from below:"
+    "RU": "Чтож, выбери одну из функций ниже",
+    "EN": "Well, select an option from below:"
 }
 
 choose_net_variation = {

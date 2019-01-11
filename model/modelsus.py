@@ -22,6 +22,7 @@ class StyleTransferModel:
         imsize = 128
       
     def get_style_model_and_losses(self, style_img, content_img):
+        device = 'cpu'
         content_layers = ['conv_4']
         style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
         cnn = models.vgg19(pretrained=True).features.to(device).eval()
@@ -75,8 +76,10 @@ class StyleTransferModel:
       
     def transfer_style(self, content_img, style_img):
         print('Building the style transfer model..')
+        device = 'cpu'
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
         normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
+        cnn = models.vgg19(pretrained=True).features.to(device).eval()
         cnn = copy.deepcopy(cnn)
         model, style_losses, content_losses = StyleTransferModel.get_style_model_and_losses(style_img, style_img, content_img)
         optimizer = StyleTransferModel.get_input_optimizer(input_img, input_img)

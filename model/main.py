@@ -10,11 +10,8 @@ import torchvision.transforms.functional as F
 import torchvision.transforms as transforms
 import torch
 
-
-
 model = StyleTransferModel()
 first_image_file = {}
-
 
 def send_prediction_on_photo(bot, update):
     chat_id = update.message.chat_id
@@ -46,14 +43,3 @@ def send_prediction_on_photo(bot, update):
         first_image_file[chat_id] = image_file
 
 
-if __name__ == '__main__':
-    print('kek')
-    from telegram.ext import Updater, MessageHandler, Filters
-    import logging
-
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO)
-    updater = Updater(token=token,  request_kwargs={'proxy_url': 'socks4://168.195.171.42:44880'})
-    updater.dispatcher.add_handler(MessageHandler(Filters.photo, send_prediction_on_photo))
-    updater.start_polling()
