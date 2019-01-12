@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 LANG = "EN"
-SET_LANG, MENU, SET_STAT, ABOUT, NEURO = range(5)
+SET_LANG, MENU, SET_STAT, ABOUT, NEURO, NEURO_STAT = range(6)
 STATE = SET_LANG
 
 def start(bot, update):
@@ -84,7 +84,7 @@ def set_state(bot, update):
     global STATE
     user = update.message.from_user
     if update.message.text == choose_net_variation[LANG]:
-        STATE = NEURO
+        STATE = NEURO_STAT
         neural_set(bot, update)
         return MENU
     elif update.message.text == view_about[LANG]:
@@ -199,7 +199,7 @@ def main():
 
             MENU: [CommandHandler('menu', menu)],
 			
-			NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
+            NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
 
             SET_STAT: [RegexHandler(
                         '^({}|{})$'.format(
