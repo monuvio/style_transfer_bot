@@ -1,8 +1,8 @@
-from torch.utils.serialization import load_lua
 from torch.autograd import Variable
 import torchvision.transforms as transforms
 import torch.nn as nn
 import torch
+from torch.utils.serialization import load_lua
 
 from PIL import Image
 
@@ -10,8 +10,8 @@ import scipy.misc
 import time
 import numpy as np
 
-from model import decoder1,decoder2,decoder3,decoder4,decoder5
-from model import encoder1,encoder2,encoder3,encoder4,encoder5
+from layers import decoder1,decoder2,decoder3,decoder4,decoder5
+from layers import encoder1,encoder2,encoder3,encoder4,encoder5
 
 
 _vgg1 = '/weights/vgg_normalised_conv1_1.t7'
