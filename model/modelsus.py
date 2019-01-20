@@ -1,186 +1,185 @@
-# %matplotlib inline
+from torch.utils.serialization import load_lua
+from torch.autograd import Variable
+import torchvision.transforms as transforms
+import torch.nn as nn
+import torch
+
 from PIL import Image
 
+import scipy.misc
+import time
+import numpy as np
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
-import matplotlib.pyplot as plt
+from model import decoder1,decoder2,decoder3,decoder4,decoder5
+from model import encoder1,encoder2,encoder3,encoder4,encoder5
 
 
-import torchvision.transforms as transforms
-import torchvision.models as models
+_vgg1 = '/weights/vgg_normalised_conv1_1.t7'
+_vgg2 = '/weights/vgg_normalised_conv2_1.t7'
+_vgg3 = '/weights/vgg_normalised_conv3_1.t7'
+_vgg4 = '/weights/vgg_normalised_conv4_1.t7'
+_vgg5 = '/weights/vgg_normalised_conv5_1.t7'
+decoder_1 = '/weights/feature_invertor_conv1_1.t7'
+decoder_2 = '/weights/feature_invertor_conv2_1.t7'
+decoder_3 = '/weights/feature_invertor_conv3_1.t7'
+decoder_4 = '/weights/feature_invertor_conv4_1.t7'
+decoder_5 = '/weights/feature_invertor_conv5_1.t7'
 
-import copy
+class WCT(nn.Module):
+    def __init__(self):
+        super(WCT, self).__init__()
+        # load pre-trained network
+        vgg1 = load_lua(_vgg1)
+        decoder1_torch = load_lua(decoder_1)
+        vgg2 = load_lua(_vgg2)
+        decoder2_torch = load_lua(decoder_2)
+        vgg3 = load_lua(_vgg3)
+        decoder3_torch = load_lua(decoder_3)
+        vgg4 = load_lua(_vgg4)
+        decoder4_torch = load_lua(decoder_4)
+        vgg5 = load_lua(_vgg5)
+        decoder5_torch = load_lua(decoder_5)
+
+
+        self.e1 = encoder1(vgg1)
+        self.d1 = decoder1(decoder1_torch)
+        self.e2 = encoder2(vgg2)
+        self.d2 = decoder2(decoder2_torch)
+        self.e3 = encoder3(vgg3)
+        self.d3 = decoder3(decoder3_torch)
+        self.e4 = encoder4(vgg4)
+        self.d4 = decoder4(decoder4_torch)
+        self.e5 = encoder5(vgg5)
+        self.d5 = decoder5(decoder5_torch)
+
+    def whiten_and_color(self,cF,sF):
+        cFSize = cF.size()
+        c_mean = torch.mean(cF,1) # c x (h x w)
+        c_mean = c_mean.unsqueeze(1).expand_as(cF)
+        cF = cF - c_mean
+
+        contentConv = torch.mm(cF,cF.t()).div(cFSize[1]-1) + torch.eye(cFSize[0]).double()
+        c_u,c_e,c_v = torch.svd(contentConv,some=False)
+
+        k_c = cFSize[0]
+        for i in range(cFSize[0]):
+            if c_e[i] < 0.00001:
+                k_c = i
+                break
+
+        sFSize = sF.size()
+        s_mean = torch.mean(sF,1)
+        sF = sF - s_mean.unsqueeze(1).expand_as(sF)
+        styleConv = torch.mm(sF,sF.t()).div(sFSize[1]-1)
+        s_u,s_e,s_v = torch.svd(styleConv,some=False)
+
+        k_s = sFSize[0]
+        for i in range(sFSize[0]):
+            if s_e[i] < 0.00001:
+                k_s = i
+                break
+
+        c_d = (c_e[0:k_c]).pow(-0.5)
+        step1 = torch.mm(c_v[:,0:k_c],torch.diag(c_d))
+        step2 = torch.mm(step1,(c_v[:,0:k_c].t()))
+        whiten_cF = torch.mm(step2,cF)
+
+        s_d = (s_e[0:k_s]).pow(0.5)
+        targetFeature = torch.mm(torch.mm(torch.mm(s_v[:,0:k_s],torch.diag(s_d)),(s_v[:,0:k_s].t())),whiten_cF)
+        targetFeature = targetFeature + s_mean.unsqueeze(1).expand_as(targetFeature)
+        return targetFeature
+
+    def transform(self,cF,sF,csF,alpha):
+        cF = cF.double()
+        sF = sF.double()
+        C,W,H = cF.size(0),cF.size(1),cF.size(2)
+        _,W1,H1 = sF.size(0),sF.size(1),sF.size(2)
+        cFView = cF.view(C,-1)
+        sFView = sF.view(C,-1)
+
+        targetFeature = self.whiten_and_color(cFView,sFView)
+        targetFeature = targetFeature.view_as(cF)
+        ccsF = alpha * targetFeature + (1.0 - alpha) * cF
+        ccsF = ccsF.float().unsqueeze(0)
+        csF.data.resize_(ccsF.size()).copy_(ccsF)
+        return csF
 
 
 class StyleTransferModel:
     def __init__(self):
-        device = 'cpu'
-        imsize = 128
-      
-    def get_style_model_and_losses(self, style_img, content_img):
-        device = 'cpu'
-        content_layers = ['conv_4']
-        style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-        cnn = models.vgg19(pretrained=True).features.to(device).eval()
-        cnn = copy.deepcopy(cnn)
+        pass
 
-        normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-        normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-        normalization = Normalization(normalization_mean, normalization_std).to(device)
+    def default_loader(self, img):
+        return Image.open(img).convert('RGB')
 
-        content_losses = []
-        style_losses = []
 
-        model = nn.Sequential(normalization)
+    def process_image(self, contentImage, styleImage):
+        fineSize = 384
+        contentImg = StyleTransferModel.default_loader(contentImage)
+        styleImg = StyleTransferModel.default_loader(styleImage)
 
-        i = 0  
-        for layer in cnn.children():
-            if isinstance(layer, nn.Conv2d):
-                i += 1
-                name = 'conv_{}'.format(i)
-            elif isinstance(layer, nn.ReLU):
-                name = 'relu_{}'.format(i)
-                layer = nn.ReLU(inplace=False)
-            elif isinstance(layer, nn.MaxPool2d):
-                name = 'pool_{}'.format(i)
-            elif isinstance(layer, nn.BatchNorm2d):
-                name = 'bn_{}'.format(i)
+        if(fineSize != 0):
+            w,h = contentImg.size
+            if(w > h):
+                if(w != fineSize):
+                    neww = fineSize
+                    newh = int(h*neww/w)
+                    contentImg = contentImg.resize((neww,newh))
+                    styleImg = styleImg.resize((neww,newh))
             else:
-                raise RuntimeError('Unrecognized layer: {}'.format(layer.__class__.__name__))
-
-            model.add_module(name, layer)
-
-            if name in content_layers:
-                target = model(content_img).detach()
-                content_loss = ContentLoss(target)
-                model.add_module("content_loss_{}".format(i), content_loss)
-                content_losses.append(content_loss)
-
-            if name in style_layers:
-                target_feature = model(style_img).detach()
-                style_loss = StyleLoss(target_feature)
-                model.add_module("style_loss_{}".format(i), style_loss)
-                style_losses.append(style_loss)
-                
-        for i in range(len(model) - 1, -1, -1):
-            if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
-                break
-
-        model = model[:(i + 1)]
-
-        return model, style_losses, content_losses
-      
-    def transfer_style(self, content_img, style_img):
-        print('Building the style transfer model..')
-        device = 'cpu'
-        normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-        normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-        cnn = models.vgg19(pretrained=True).features.to(device).eval()
-        cnn = copy.deepcopy(cnn)
-        model, style_losses, content_losses = StyleTransferModel.get_style_model_and_losses(style_img, style_img, content_img)
-        optimizer = StyleTransferModel.get_input_optimizer(input_img, input_img)
-
-        print('Optimizing..')
-        num_steps=100
-        run = [0]
-        while run[0] <= num_steps:
-
-            def closure():
-                input_img.data.clamp_(0, 1)
-
-                optimizer.zero_grad()
-
-                model(input_img)
-
-                style_score = 0
-                content_score = 0
-
-                for sl in style_losses:
-                    style_score += sl.loss
-                for cl in content_losses:
-                    content_score += cl.loss
-                
-                content_weight=1
-                style_weight=100000
-                style_score *= style_weight
-                content_score *= content_weight
-
-                loss = style_score + content_score
-                loss.backward()
-
-                run[0] += 1
-                if run[0] % 50 == 0:
-                    print("run {}:".format(run))
-                    print('Style Loss : {:4f} Content Loss: {:4f}'.format(
-                        style_score.item(), content_score.item()))
-                    print()
-
-                return style_score + content_score
-
-            optimizer.step(closure)
-
-        input_img.data.clamp_(0, 1)
-
-        return input_img
-    
-    def get_input_optimizer(self, input_img):
-        optimizer = optim.LBFGS([input_img.requires_grad_()]) 
-        return optimizer
-      
-    def gram_matrix(self, input):
-        batch_size , h, w, f_map_num = input.size() 
-
-        features = input.view(batch_size * h, w * f_map_num) 
-
-        G = torch.mm(features, features.t()) 
+                if(h != fineSize):
+                    newh = fineSize
+                    neww = int(w*newh/h)
+                    contentImg = contentImg.resize((neww,newh))
+                    styleImg = styleImg.resize((neww,newh))
 
 
-        return G.div(batch_size * h * w * f_map_num)
+        # Preprocess Images
+        contentImg = transforms.ToTensor()(contentImg)
+        styleImg = transforms.ToTensor()(styleImg)
+        return contentImg.unsqueeze(0),styleImg.unsqueeze(0)
+		
+    wct = WCT()
+    def transfer_style(contentImg,styleImg,csF):
+        contentImg, styleImg = StyleTransferModel.process_image(contentImg, styleImg)
 
-    def process_image(self, img_stream):
-        loader = transforms.Compose([
-            transforms.Resize(imsize), 
-            transforms.CenterCrop(imsize),
-            transforms.ToTensor()]) 
+        sF5 = wct.e5(styleImg)
+        cF5 = wct.e5(contentImg)
+        sF5 = sF5.data.cpu().squeeze(0)
+        cF5 = cF5.data.cpu().squeeze(0)
+        #Последний аргумент у функции снизу - так называемая alpha. 
+        #Она отвечает за влияние style image на content image.
+        csF5 = wct.transform(cF5,sF5,csF,0.2)
+        Im5 = wct.d5(csF5)
 
-        image = Image.open(img_stream)
-        image = loader(image).unsqueeze(0)
-        return image.to(device, torch.float)
+        sF4 = wct.e4(styleImg)
+        cF4 = wct.e4(Im5)
+        sF4 = sF4.data.cpu().squeeze(0)
+        cF4 = cF4.data.cpu().squeeze(0)
+        csF4 = wct.transform(cF4,sF4,csF,0.2)
+        Im4 = wct.d4(csF4)
 
-class ContentLoss(nn.Module):
+        sF3 = wct.e3(styleImg)
+        cF3 = wct.e3(Im4)
+        sF3 = sF3.data.cpu().squeeze(0)
+        cF3 = cF3.data.cpu().squeeze(0)
+        csF3 = wct.transform(cF3,sF3,csF,0.2)
+        Im3 = wct.d3(csF3)
 
-        def __init__(self, target,):
-            super(ContentLoss, self).__init__()
-            self.target = target.detach()
-            self.loss = F.mse_loss(self.target, self.target )
+        sF2 = wct.e2(styleImg)
+        cF2 = wct.e2(Im3)
+        sF2 = sF2.data.cpu().squeeze(0)
+        cF2 = cF2.data.cpu().squeeze(0)
+        csF2 = wct.transform(cF2,sF2,csF,0.2)
+        Im2 = wct.d2(csF2)
 
-        def forward(self, input):
-            self.loss = F.mse_loss(input, self.target)
-            return input
-
-class StyleLoss(nn.Module):
-        def __init__(self, target_feature):
-            super(StyleLoss, self).__init__()
-            self.target = StyleTransferModel.gram_matrix(target_feature, target_feature).detach()
-            self.loss = F.mse_loss(self.target, self.target)# to initialize with something
-
-        def forward(self, input):
-            G = StyleTransferModel.gram_matrix(input, input)
-            self.loss = F.mse_loss(G, self.target)
-            return input
-
-class Normalization(nn.Module):
-        def __init__(self, mean, std):
-            super(Normalization, self).__init__()
-            self.mean = torch.tensor(mean).view(-1, 1, 1)
-            self.std = torch.tensor(std).view(-1, 1, 1)
-
-        def forward(self, img):
-            return (img - self.mean) / self.std
+        sF1 = wct.e1(styleImg)
+        cF1 = wct.e1(Im2)
+        sF1 = sF1.data.cpu().squeeze(0)
+        cF1 = cF1.data.cpu().squeeze(0)
+        csF1 = wct.transform(cF1,sF1,csF,0.2)
+        Im1 = wct.d1(csF1)
+        return Im1
 
 
 

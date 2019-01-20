@@ -85,12 +85,10 @@ def set_state(bot, update):
     user = update.message.from_user
     if update.message.text == choose_net_variation[LANG]:
         STATE = NEURO_STAT
-        neural_set(bot, update)
-        return MENU
+        return neural_set(bot, update)
     elif update.message.text == view_about[LANG]:
         STATE = ABOUT
-        about_bot(bot, update)
-        return MENU
+        return about_bot(bot, update)
     else:
         STATE = MENU
         return MENU
@@ -102,8 +100,8 @@ def send_prediction_on_photo(bot, update):
     """
     Neural networks should work :)
     """
-    user = update.message.from_user
-    logger.info("Got image from {}".format(user.first_name))
+    chat_id = update.message.chat_id
+    print("Got image from {}".format(chat_id))
 
     image_info = update.message.photo[-1]
     image_file = bot.get_file(image_info)
@@ -116,8 +114,16 @@ def send_prediction_on_photo(bot, update):
 
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
+		
+        csF = torch.Tensor()
+        csF = Variable()
+        print('Transferring')
+        start_time = time.time()
 
-        output = model.transfer_style(content_image_stream, style_image_stream)
+        output = model.transfer_style(content_image_stream, style_image_stream, csF)
+		
+        end_time = time.time()
+        print('Elapsed time is: %f' % (end_time - start_time))
 
         output_stream = BytesIO()
         unloader = transforms.ToPILImage()
@@ -148,7 +154,7 @@ def about_bot(bot, update):
     logger.info("About info requested by {}.".format(user.first_name))
     bot.send_message(chat_id=update.message.chat_id, text=about_info[LANG])
     bot.send_message(chat_id=update.message.chat_id, text=back2menu[LANG])
-    return
+    return MENU
 	
 def help(bot, update):
     """
