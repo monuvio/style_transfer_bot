@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from lang_dict import *
 import logging
-from modelsus import StyleTransferModel
+#from modelsus import StyleTransferModel
 from telegram_token import token
 import numpy as np
 from PIL import Image
@@ -22,58 +22,28 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-LANG = "EN"
-SET_LANG, MENU, SET_STAT, ABOUT, NEURO, NEURO_STAT = range(6)
-STATE = SET_LANG
+MENU, SET_STAT, ABOUT, NEURO= range(4)
 
 def start(bot, update):
     """
     Start function. Displayed whenever the /start command is called.
     This function sets the language of the bot.
     """
-    # Create buttons to select language:
-    keyboard = [['RU', 'EN']]
-
-    # Create initial message:
-    message = "Hey, i'm 'Style transfer bot! / Привет! Я бот для переноса стилей! \n\n\
-Please select a language to start. / Пожалуйста, выбери язык, чтобы начать."
-				
-
-    reply_markup = ReplyKeyboardMarkup(keyboard,
-                                       one_time_keyboard=True,
-                                       resize_keyboard=True)
-    update.message.reply_text(message, reply_markup=reply_markup)
-
-    return SET_LANG
-	
-def set_lang(bot, update):
-    """
-    First handler with received data to set language globally.
-    """
-    # Set language:
-    global LANG
-    LANG = update.message.text
-    user = update.message.from_user
-
-    logger.info("Language set by {} to {}.".format(user.first_name, LANG))
-    update.message.reply_text(lang_selected[LANG],
-                              reply_markup=ReplyKeyboardRemove())
-
-    return MENU
+    update.message.reply_text("Привет! Я бот для переноса стилей!")
+    return menu(bot, update)
 	
 def menu(bot, update):
     """
     Main menu function.
     This will display the options from the main menu.
     """
-    # Create buttons to select language:
-    keyboard = [[choose_net_variation[LANG], view_about[LANG]]]
+    keyboard = [["Нейросетевой перенос стиля", "О боте"]]
     reply_markup = ReplyKeyboardMarkup(keyboard,
                                        one_time_keyboard=True,
                                        resize_keyboard=True)
     user = update.message.from_user
     logger.info("Menu command requested by {}.".format(user.first_name))
-    update.message.reply_text(main_menu[LANG], reply_markup=reply_markup)
+    update.message.reply_text("Чтож, выбери одну из функций ниже", reply_markup=reply_markup)
     return SET_STAT
 	
 def set_state(bot, update):
@@ -83,17 +53,15 @@ def set_state(bot, update):
     # Set state:
     global STATE
     user = update.message.from_user
-    if update.message.text == choose_net_variation[LANG]:
-        STATE = NEURO_STAT
+    if update.message.text == "Нейросетевой перенос стиля":
         return neural_set(bot, update)
-    elif update.message.text == view_about[LANG]:
-        STATE = ABOUT
+    elif update.message.text == "О боте":
         return about_bot(bot, update)
     else:
         STATE = MENU
         return MENU
 		
-model = StyleTransferModel()
+#model = StyleTransferModel()
 first_image_file = {}
 
 def send_prediction_on_photo(bot, update):
@@ -120,7 +88,7 @@ def send_prediction_on_photo(bot, update):
         print('Transferring')
         start_time = time.time()
 
-        output = model.transfer_style(content_image_stream, style_image_stream, csF)
+        #output = model.transfer_style(content_image_stream, style_image_stream, csF)
 		
         end_time = time.time()
         print('Elapsed time is: %f' % (end_time - start_time))
@@ -143,8 +111,8 @@ def neural_set(bot, update):
     """
     user = update.message.from_user
     logger.info("Neural style requested by {}.".format(user.first_name))
-    update.message.reply_text(neural_net[LANG])
-    return NEURO
+    update.message.reply_text("Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект, затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
+    return 
     	
 def about_bot(bot, update):
     """
@@ -152,8 +120,9 @@ def about_bot(bot, update):
     """
     user = update.message.from_user
     logger.info("About info requested by {}.".format(user.first_name))
-    bot.send_message(chat_id=update.message.chat_id, text=about_info[LANG])
-    bot.send_message(chat_id=update.message.chat_id, text=back2menu[LANG])
+    bot.send_message(chat_id=update.message.chat_id, text="Чатбот для переноса стилей##TODO \n\n\
+")
+    bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
     return MENU
 	
 def help(bot, update):
@@ -163,7 +132,7 @@ def help(bot, update):
     """
     user = update.message.from_user
     logger.info("User {} asked for help.".format(user.first_name))
-    update.message.reply_text(help_info[LANG],
+    update.message.reply_text("Используй команду /cancel , чтобы выйти из чата. \nИспользуй /start , чтобы перезагрузить бота.",
                               reply_markup=ReplyKeyboardRemove())
 	
 def cancel(bot, update):
@@ -173,7 +142,7 @@ def cancel(bot, update):
     """
     user = update.message.from_user
     logger.info("User {} canceled the conversation.".format(user.first_name))
-    update.message.reply_text(goodbye[LANG],
+    update.message.reply_text("Пока! Надеемся пообщаться с тобой ещё!",
                               reply_markup=ReplyKeyboardRemove())
 
     return ConversationHandler.END
@@ -189,9 +158,8 @@ def main():
     states on each step of the flow. Each state has its own
     handler for the interaction with the user.
     """
-    global LANG
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://168.195.171.42:44880'})
+    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://148.251.113.238:50879'})
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -201,20 +169,14 @@ def main():
         entry_points=[CommandHandler('start', start)],
 
         states={
-            SET_LANG: [RegexHandler('^(RU|EN)$', set_lang)],
-
             MENU: [CommandHandler('menu', menu)],
 			
             NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
 
             SET_STAT: [RegexHandler(
                         '^({}|{})$'.format(
-                            choose_net_variation['RU'], view_about['RU'],),
-                        set_state),
-                       RegexHandler(
-                        '^({}|{})$'.format(
-                            choose_net_variation['EN'], view_about['EN'],),
-                        set_state)],
+                            "Нейросетевой перенос стиля", "О боте",),
+                        set_state)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel),
