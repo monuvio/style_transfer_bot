@@ -2,9 +2,8 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, RegexHandler
 from telegram.ext import ConversationHandler, CallbackQueryHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
-from lang_dict import *
 import logging
-#from modelsus import StyleTransferModel
+from model import StyleTransferModel
 from telegram_token import token
 import numpy as np
 from PIL import Image
@@ -61,7 +60,7 @@ def set_state(bot, update):
         STATE = MENU
         return MENU
 		
-#model = StyleTransferModel()
+model = StyleTransferModel()
 first_image_file = {}
 
 def send_prediction_on_photo(bot, update):
@@ -88,7 +87,7 @@ def send_prediction_on_photo(bot, update):
         print('Transferring')
         start_time = time.time()
 
-        #output = model.transfer_style(content_image_stream, style_image_stream, csF)
+        output = model.transfer_style(content_image_stream, style_image_stream, csF)
 		
         end_time = time.time()
         print('Elapsed time is: %f' % (end_time - start_time))
