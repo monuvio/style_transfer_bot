@@ -14,6 +14,9 @@ import io
 import torchvision.transforms.functional as F
 import torchvision.transforms as transforms
 import torch
+from model import StyleTransferModel
+
+model = StyleTransferModel()
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -21,7 +24,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-MENU, SET_STAT, ABOUT, NEURO= range(4)
+MENU, SET_STAT, ABOUT, NEURO = range(4)
+
 
 def start(bot, update):
     """
@@ -30,7 +34,8 @@ def start(bot, update):
     """
     update.message.reply_text("Привет! Я бот для переноса стилей!")
     return menu(bot, update)
-	
+
+
 def menu(bot, update):
     """
     Main menu function.
@@ -44,24 +49,23 @@ def menu(bot, update):
     logger.info("Menu command requested by {}.".format(user.first_name))
     update.message.reply_text("Чтож, выбери одну из функций ниже", reply_markup=reply_markup)
     return SET_STAT
-	
+
+
 def set_state(bot, update):
     """
     Set option selected from menu.
     """
-    # Set state:
-    global STATE
     user = update.message.from_user
     if update.message.text == "Нейросетевой перенос стиля":
         return neural_set(bot, update)
     elif update.message.text == "О боте":
         return about_bot(bot, update)
     else:
-        STATE = MENU
         return MENU
 		
 model = StyleTransferModel()
 first_image_file = {}
+
 
 def send_prediction_on_photo(bot, update):
     """
@@ -81,11 +85,6 @@ def send_prediction_on_photo(bot, update):
 
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
-		
-        csF = torch.Tensor()
-        csF = Variable()
-        print('Transferring')
-        start_time = time.time()
 
         output = model.transfer_style(content_image_stream, style_image_stream, csF)
 		
@@ -93,26 +92,28 @@ def send_prediction_on_photo(bot, update):
         print('Elapsed time is: %f' % (end_time - start_time))
 
         output_stream = BytesIO()
-        unloader = transforms.ToPILImage()
-        output = torch.reshape(output, [3, 128, 128])
-        output = unloader(output)
         output.save(output_stream, format='PNG')
         output_stream.seek(0)
         bot.send_photo(chat_id, photo=output_stream)
         print("Sent Photo to user")
+
+        return MENU
     else:
         first_image_file[chat_id] = image_file
-    return
-		
+        return NEURO
+
+
 def neural_set(bot, update):
     """
     Redirecting on styling function
     """
     user = update.message.from_user
     logger.info("Neural style requested by {}.".format(user.first_name))
-    update.message.reply_text("Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект, затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
-    return 
-    	
+    update.message.reply_text(
+        "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект, затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
+    return NEURO
+
+
 def about_bot(bot, update):
     """
     About function. Displays info about DisAtBot.
@@ -123,7 +124,8 @@ def about_bot(bot, update):
 ")
     bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
     return MENU
-	
+
+
 def help(bot, update):
     """
     Help function.
@@ -131,9 +133,11 @@ def help(bot, update):
     """
     user = update.message.from_user
     logger.info("User {} asked for help.".format(user.first_name))
-    update.message.reply_text("Используй команду /cancel , чтобы выйти из чата. \nИспользуй /start , чтобы перезагрузить бота.",
-                              reply_markup=ReplyKeyboardRemove())
-	
+    update.message.reply_text(
+        "Используй команду /cancel , чтобы выйти из чата. \nИспользуй /start , чтобы перезагрузить бота.",
+        reply_markup=ReplyKeyboardRemove())
+
+
 def cancel(bot, update):
     """
     User cancelation function.
@@ -145,11 +149,13 @@ def cancel(bot, update):
                               reply_markup=ReplyKeyboardRemove())
 
     return ConversationHandler.END
-	
+
+
 def error(bot, update, error):
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, error)
-	
+
+
 def main():
     """
     Main function.
@@ -157,8 +163,9 @@ def main():
     states on each step of the flow. Each state has its own
     handler for the interaction with the user.
     """
+
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://148.251.113.238:50879'})
+    updater = Updater(token)
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -169,13 +176,13 @@ def main():
 
         states={
             MENU: [CommandHandler('menu', menu)],
-			
+
             NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
 
             SET_STAT: [RegexHandler(
-                        '^({}|{})$'.format(
-                            "Нейросетевой перенос стиля", "О боте",),
-                        set_state)]
+                '^({}|{})$'.format(
+                    "Нейросетевой перенос стиля", "О боте", ),
+                set_state)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel),
@@ -198,4 +205,3 @@ def main():
 if __name__ == '__main__':
     print('ready')
     main()
-
