@@ -61,6 +61,8 @@ def set_state(bot, update):
     else:
         return MENU
 		
+
+		
 first_image_file = {}
 
 def send_prediction_on_photo(bot, update):
@@ -72,16 +74,17 @@ def send_prediction_on_photo(bot, update):
     start_time = time.time()
 
     image_info = update.message.photo[-1]
-    image_file = bot.get_file(image_info)
-
+    image_file = bot.get_file(image_info) 
+	
     if chat_id in first_image_file:
-
+		
         content_image_stream = BytesIO()
         first_image_file[chat_id].download(out=content_image_stream)
         del first_image_file[chat_id]
 
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
+        update.message.reply_text("Изображения получены. Подожди примерно 30 секунд.")
 
         output = transfer_style(content_image_stream, style_image_stream)
 
@@ -117,8 +120,8 @@ def about_bot(bot, update):
     """
     user = update.message.from_user
     logger.info("About info requested by {}.".format(user.first_name))
-    bot.send_message(chat_id=update.message.chat_id, text="Чатбот для переноса стилей##TODO \n\n\
-")
+    bot.send_message(chat_id=update.message.chat_id, text="Этот бот создан в рамках проектной работы в Deep learning school."\
+    "Для переноса стиля используется нейросеть VGG16. Для минимизации функции потерь Грэмиан матрицы применяется covariance vector")
     bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
     return MENU
 
@@ -162,7 +165,7 @@ def main():
     """
 
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://88.99.212.57:56748'})
+    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://5.9.166.13:1080'})
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -178,12 +181,14 @@ def main():
 
             SET_STAT: [RegexHandler(
                 '^({}|{})$'.format(
-                    "Нейросетевой перенос стиля", "О боте", ),
+                "Нейросетевой перенос стиля", "О боте"),
                 set_state)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel),
-                   CommandHandler('help', help)]
+                   CommandHandler('help', help)],
+				   
+        conversation_timeout = 900.0
     )
 
     dp.add_handler(conv_handler)
