@@ -7,6 +7,10 @@ model/telegram_token.py
 Guide.ipynb
 cmd.bat
 
+telegram_bot/weights.pth
+
+
+model/weights.pth
 **/.idea
 
 **/__pycache__

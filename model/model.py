@@ -1,178 +1,166 @@
-from torch.autograd import Variable
-import torchvision.transforms as transforms
 import torch.nn as nn
-import torch
-import torchfile
-
+import torch.nn.functional as F
+from torch import optim
+import torchvision
+from torchvision import transforms
 from PIL import Image
-
-import scipy.misc
+from itertools import product
 import time
-import numpy as np
+import torch
+from torch.autograd import Variable
 
-from layers import decoder1, decoder2, decoder3, decoder4, decoder5
-from layers import encoder1, encoder2, encoder3, encoder4, encoder5
+class VGG(nn.Module):
+	def __init__(self, pool='max'):
+		super(VGG, self).__init__()
+		self.conv1_1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+		self.conv1_2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+		self.conv2_1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+		self.conv2_2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+		self.conv3_1 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+		self.conv3_2 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+		self.conv3_3 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+		self.conv3_4 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+		self.conv4_1 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+		self.conv4_2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv4_3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv4_4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv5_1 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv5_2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv5_3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.conv5_4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+		self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+		self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+		self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+		self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
+		self.pool5 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-_vgg1 = 'weights/vgg_normalised_conv1_1.t7'
-_vgg2 = 'weights/vgg_normalised_conv2_1.t7'
-_vgg3 = 'weights/vgg_normalised_conv3_1.t7'
-_vgg4 = 'weights/vgg_normalised_conv4_1.t7'
-_vgg5 = 'weights/vgg_normalised_conv5_1.t7'
-decoder_1 = 'weights/feature_invertor_conv1_1.t7'
-decoder_2 = 'weights/feature_invertor_conv2_1.t7'
-decoder_3 = 'weights/feature_invertor_conv3_1.t7'
-decoder_4 = 'weights/feature_invertor_conv4_1.t7'
-decoder_5 = 'weights/feature_invertor_conv5_1.t7'
+			
+	def forward(self, x, out_keys):
+		out = {}
+		out['r11'] = F.relu(self.conv1_1(x))
+		out['r12'] = F.relu(self.conv1_2(out['r11']))
+		out['p1'] = self.pool1(out['r12'])
+		out['r21'] = F.relu(self.conv2_1(out['p1']))
+		out['r22'] = F.relu(self.conv2_2(out['r21']))
+		out['p2'] = self.pool2(out['r22'])
+		out['r31'] = F.relu(self.conv3_1(out['p2']))
+		out['r32'] = F.relu(self.conv3_2(out['r31']))
+		out['p3'] = self.pool3(out['r32'])
+		out['r41'] = F.relu(self.conv4_1(out['p3']))
+		out['r42'] = F.relu(self.conv4_2(out['r41']))
+		out['p4'] = self.pool4(out['r42'])
+		out['r51'] = F.relu(self.conv5_1(out['p4']))
+		out['r52'] = F.relu(self.conv5_2(out['r51']))
+		out['p5'] = self.pool5(out['r52'])
+		return [out[key] for key in out_keys]
 
+class Identity(nn.Module):
+	def __init__(self):
+		super(Identity, self).__init__()
+	def forward(self, source):
+		return source
 
-class WCT(nn.Module):
-    def __init__(self):
-        super(WCT, self).__init__()
-        # load pre-trained network
-        vgg1 = torchfile.load(_vgg1)
-        decoder1_torch = torchfile.load(decoder_1)
-        vgg2 = torchfile.load(_vgg2)
-        decoder2_torch = torchfile.load(decoder_2)
-        vgg3 = torchfile.load(_vgg3)
-        decoder3_torch = torchfile.load(decoder_3)
-        vgg4 = torchfile.load(_vgg4)
-        decoder4_torch = torchfile.load(decoder_4)
-        vgg5 = torchfile.load(_vgg5)
-        decoder5_torch = torchfile.load(decoder_5)
+class CovarianceMatrix(nn.Module):
+	def __init__(self):
+		super(CovarianceMatrix, self).__init__()
+	def forward(self, source):
+		one, nFilter, h, w = source.size()
+		m = h * w
+		F = source.view(nFilter, m)
+		A = torch.mean(F, dim=1).view(-1, 1)
+		G = torch.mm(F, F.transpose(0, 1)).div(m) - torch.mm(A, A.transpose(0, 1))
+		G.div_(nFilter)
+		return G
 
-        self.e1 = encoder1(vgg1)
-        self.d1 = decoder1(decoder1_torch)
-        self.e2 = encoder2(vgg2)
-        self.d2 = decoder2(decoder2_torch)
-        self.e3 = encoder3(vgg3)
-        self.d3 = decoder3(decoder3_torch)
-        self.e4 = encoder4(vgg4)
-        self.d4 = decoder4(decoder4_torch)
-        self.e5 = encoder5(vgg5)
-        self.d5 = decoder5(decoder5_torch)
+class LayerLoss(nn.Module):
+	def __init__(self, description, rawTarget, activationShift=0.0):
+		super(LayerLoss, self).__init__()
+		if description == 'raw':
+			self.class_, self.argTpl = Identity, tuple()
+		elif description == 'covariance':
+			self.class_, self.argTpl = CovarianceMatrix, tuple()
+		self.target = self.class_(*self.argTpl)(rawTarget).detach()
 
-    def whiten_and_color(self, cF, sF):
-        cFSize = cF.size()
-        c_mean = torch.mean(cF, 1)  # c x (h x w)
-        c_mean = c_mean.unsqueeze(1).expand_as(cF)
-        cF = cF - c_mean
+	def forward(self, source):
+		out = nn.MSELoss()(
+			self.class_(*self.argTpl)(source), 
+			self.target,
+		)
+		return out
 
-        contentConv = torch.mm(cF, cF.t()).div(cFSize[1] - 1) + torch.eye(cFSize[0]).double()
-        c_u, c_e, c_v = torch.svd(contentConv, some=False)
+img_size = 384
+prep = transforms.Compose([
+	transforms.Scale(img_size),
+	transforms.ToTensor(),
+	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]), # turn to BGR
+	transforms.Normalize(mean=[0.40760392, 0.45795686, 0.48501961], std=[1, 1, 1]), # subtract imagenet mean
+	transforms.Lambda(lambda x: x.mul_(255.0)), 
+])
+postpa = transforms.Compose([
+	transforms.Lambda(lambda x: x.mul_(1.0/255.0)),
+	transforms.Normalize(mean=[-0.40760392, -0.45795686, -0.48501961], std=[1, 1, 1]), # add imagenet mean
+	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]), # turn to RGB
+])
+postpb = transforms.Compose([
+	transforms.ToPILImage(),
+])
+def postp(tensor):
+	return postpb(postpa(tensor).clamp(0.0, 1.0))
 
-        k_c = cFSize[0]
-        for i in range(cFSize[0]):
-            if c_e[i] < 0.00001:
-                k_c = i
-                break
+vgg = VGG()
+vgg.load_state_dict(torch.load('weights.pth'))
+for param in vgg.parameters():
+	param.requires_grad = False
+if torch.cuda.is_available():
+	vgg.cuda()
 
-        sFSize = sF.size()
-        s_mean = torch.mean(sF, 1)
-        sF = sF - s_mean.unsqueeze(1).expand_as(sF)
-        styleConv = torch.mm(sF, sF.t()).div(sFSize[1] - 1)
-        s_u, s_e, s_v = torch.svd(styleConv, some=False)
+style_layers = ['r11', 'r21', 'r31', 'r41'] 
+content_layers = ['r32', 'r42']
+loss_layers = style_layers + content_layers
+style_weights = [1e3] * len(style_layers)
+content_weights = [1e0] * len(content_layers)
+weights = style_weights + content_weights
+n_iter = 0
 
-        k_s = sFSize[0]
-        for i in range(sFSize[0]):
-            if s_e[i] < 0.00001:
-                k_s = i
-                break
+activationShift = 0.0
+def transfer_style(content_img, style_img):
+    imgs_torch = [prep(Image.open(style_img).convert('RGB')), prep(Image.open(content_img).convert('RGB'))]
+    if torch.cuda.is_available():
+         imgs_torch = [Variable(img.unsqueeze(0).cuda()) for img in imgs_torch]
+    else:
+        imgs_torch = [Variable(img.unsqueeze(0)) for img in imgs_torch]
+    style_image, content_image = imgs_torch
 
-        c_d = (c_e[0:k_c]).pow(-0.5)
-        step1 = torch.mm(c_v[:, 0:k_c], torch.diag(c_d))
-        step2 = torch.mm(step1, (c_v[:, 0:k_c].t()))
-        whiten_cF = torch.mm(step2, cF)
+    style_targets = [A.detach() for A in vgg(style_image, style_layers)]
+    content_targets = [A.detach() for A in vgg(content_image, content_layers)]
 
-        s_d = (s_e[0:k_s]).pow(0.5)
-        targetFeature = torch.mm(torch.mm(torch.mm(s_v[:, 0:k_s], torch.diag(s_d)), (s_v[:, 0:k_s].t())), whiten_cF)
-        targetFeature = targetFeature + s_mean.unsqueeze(1).expand_as(targetFeature)
-        return targetFeature
+    opt_img = Variable(content_image.data.clone(), requires_grad=True)
 
-    def transform(self, cF, sF, csF, alpha):
-        cF = cF.double()
-        sF = sF.double()
-        C, W, H = cF.size(0), cF.size(1), cF.size(2)
-        _, W1, H1 = sF.size(0), sF.size(1), sF.size(2)
-        cFView = cF.view(C, -1)
-        sFView = sF.view(C, -1)
+    loss_fns = [
+        LayerLoss('covariance', rawTarget, activationShift) for rawTarget in style_targets] + [
+        LayerLoss('raw', rawTarget) for rawTarget in content_targets]
+    if torch.cuda.is_available():
+        loss_fns = [loss_fn.cuda() for loss_fn in loss_fns]
 
-        targetFeature = self.whiten_and_color(cFView, sFView)
-        targetFeature = targetFeature.view_as(cF)
-        ccsF = alpha * targetFeature + (1.0 - alpha) * cF
-        ccsF = ccsF.float().unsqueeze(0)
-        csF.data.resize_(ccsF.size()).copy_(ccsF)
-        return csF
+    style_targets, content_targets = None, None
 
+    optimizer = optim.LBFGS([opt_img])
+    max_iter = 100
+    show_iter = 49
+    n_iter = 0
+	
+    def closure():
+        optimizer.zero_grad()
+        out = vgg(opt_img, loss_layers)
+        layer_losses = [weights[a] * loss_fns[a](A) for a, A in enumerate(out)]
+        loss = sum(layer_losses)
+        loss.backward()
+        global n_iter
+        n_iter += 1
+        return loss
 
-class StyleTransferModel:
-    def __init__(self):
-        self.wct = WCT()
-
-    def default_loader(self, img):
-        return Image.open(img).convert('RGB')
-
-    def process_image(self, contentImage, styleImage):
-        fineSize = 128
-        contentImg = self.default_loader(contentImage)
-        styleImg = self.default_loader(styleImage)
-
-        if (fineSize != 0):
-            w, h = contentImg.size
-            if (w > h):
-                if (w != fineSize):
-                    neww = fineSize
-                    newh = int(h * neww / w)
-                    contentImg = contentImg.resize((neww, newh))
-                    styleImg = styleImg.resize((neww, newh))
-            else:
-                if (h != fineSize):
-                    newh = fineSize
-                    neww = int(w * newh / h)
-                    contentImg = contentImg.resize((neww, newh))
-                    styleImg = styleImg.resize((neww, newh))
-
-        # Preprocess Images
-        contentImg = transforms.ToTensor()(contentImg)
-        styleImg = transforms.ToTensor()(styleImg)
-        return contentImg.unsqueeze(0), styleImg.unsqueeze(0)
-
-    def transfer_style(self, contentImg, styleImg, csF):
-        contentImg, styleImg = self.process_image(contentImg, styleImg)
-
-        sF5 = self.wct.e5(styleImg)
-        cF5 = self.wct.e5(contentImg)
-        sF5 = sF5.data.cpu().squeeze(0)
-        cF5 = cF5.data.cpu().squeeze(0)
-        # Последний аргумент у функции снизу - так называемая alpha.
-        # Она отвечает за влияние style image на content image.
-        csF5 = self.wct.transform(cF5, sF5, csF, 0.2)
-        Im5 = self.wct.d5(csF5)
-
-        sF4 = self.wct.e4(styleImg)
-        cF4 = self.wct.e4(Im5)
-        sF4 = sF4.data.cpu().squeeze(0)
-        cF4 = cF4.data.cpu().squeeze(0)
-        csF4 = self.wct.transform(cF4, sF4, csF, 0.2)
-        Im4 = self.wct.d4(csF4)
-
-        sF3 = self.wct.e3(styleImg)
-        cF3 = self.wct.e3(Im4)
-        sF3 = sF3.data.cpu().squeeze(0)
-        cF3 = cF3.data.cpu().squeeze(0)
-        csF3 = self.wct.transform(cF3, sF3, csF, 0.2)
-        Im3 = self.wct.d3(csF3)
-
-        sF2 = self.wct.e2(styleImg)
-        cF2 = self.wct.e2(Im3)
-        sF2 = sF2.data.cpu().squeeze(0)
-        cF2 = cF2.data.cpu().squeeze(0)
-        csF2 = self.wct.transform(cF2, sF2, csF, 0.2)
-        Im2 = self.wct.d2(csF2)
-
-        sF1 = self.wct.e1(styleImg)
-        cF1 = self.wct.e1(Im2)
-        sF1 = sF1.data.cpu().squeeze(0)
-        cF1 = cF1.data.cpu().squeeze(0)
-        csF1 = self.wct.transform(cF1, sF1, csF, 0.2)
-        Im1 = self.wct.d1(csF1)
-        return Im1
+    while n_iter < max_iter:
+        optimizer.step(closure)
+		
+    out_img = postp(opt_img.data[0].cpu().squeeze())
+    return out_img

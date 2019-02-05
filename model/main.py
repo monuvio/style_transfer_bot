@@ -3,7 +3,6 @@ from telegram.ext import ConversationHandler, CallbackQueryHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import logging
-from model import StyleTransferModel
 from telegram_token import token
 import numpy as np
 from PIL import Image
@@ -14,9 +13,9 @@ import io
 import torchvision.transforms.functional as F
 import torchvision.transforms as transforms
 import torch
-from model import StyleTransferModel
+from model import transfer_style
+import time
 
-model = StyleTransferModel()
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,7 +29,6 @@ MENU, SET_STAT, ABOUT, NEURO = range(4)
 def start(bot, update):
     """
     Start function. Displayed whenever the /start command is called.
-    This function sets the language of the bot.
     """
     update.message.reply_text("Привет! Я бот для переноса стилей!")
     return menu(bot, update)
@@ -63,16 +61,15 @@ def set_state(bot, update):
     else:
         return MENU
 		
-model = StyleTransferModel()
 first_image_file = {}
-
 
 def send_prediction_on_photo(bot, update):
     """
-    Neural networks should work :)
+    Main function of style transfer. Takes content and style images and send result of transfer.
     """
     chat_id = update.message.chat_id
     print("Got image from {}".format(chat_id))
+    start_time = time.time()
 
     image_info = update.message.photo[-1]
     image_file = bot.get_file(image_info)
@@ -86,16 +83,15 @@ def send_prediction_on_photo(bot, update):
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
 
-        output = model.transfer_style(content_image_stream, style_image_stream, csF)
-		
-        end_time = time.time()
-        print('Elapsed time is: %f' % (end_time - start_time))
+        output = transfer_style(content_image_stream, style_image_stream)
 
         output_stream = BytesIO()
         output.save(output_stream, format='PNG')
         output_stream.seek(0)
         bot.send_photo(chat_id, photo=output_stream)
         print("Sent Photo to user")
+        end_time = time.time()
+        print('Elapsed time is: %f' % (end_time - start_time))
 
         return MENU
     else:
@@ -110,13 +106,14 @@ def neural_set(bot, update):
     user = update.message.from_user
     logger.info("Neural style requested by {}.".format(user.first_name))
     update.message.reply_text(
-        "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект, затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
+        "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект," \
+		"затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
     return NEURO
 
 
 def about_bot(bot, update):
     """
-    About function. Displays info about DisAtBot.
+    About function. Displays info about Style Transfer Bot.
     """
     user = update.message.from_user
     logger.info("About info requested by {}.".format(user.first_name))
@@ -165,7 +162,7 @@ def main():
     """
 
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token)
+    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://88.99.212.57:56748'})
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -194,7 +191,7 @@ def main():
     # Log all errors:
     dp.add_error_handler(error)
 
-    # Start DisAtBot:
+    # Start Style transfer bot:
     updater.start_polling()
 
     # Run the bot until the user presses Ctrl-C or the process

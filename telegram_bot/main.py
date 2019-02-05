@@ -52,6 +52,6 @@ if __name__ == '__main__':
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=logging.INFO)
     # используем прокси, так как без него у меня ничего не работало(
-    updater = Updater(token=token,  request_kwargs={'proxy_url': 'socks4://168.195.171.42:44880'})
+    updater = Updater(token=token,  request_kwargs={'proxy_url': 'socks4://88.99.212.57:56748'})
     updater.dispatcher.add_handler(MessageHandler(Filters.photo, send_prediction_on_photo))
     updater.start_polling()
