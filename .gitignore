@@ -11,6 +11,7 @@ telegram_bot/weights.pth
 
 
 model/weights.pth
+model/pretrained
 **/.idea
 
 **/__pycache__

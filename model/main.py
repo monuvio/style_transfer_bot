@@ -2,19 +2,24 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, RegexHandler
 from telegram.ext import ConversationHandler, CallbackQueryHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
-import logging
 from telegram_token import token
-import numpy as np
-from PIL import Image
-from io import BytesIO
-from array import array
-import os
-import io
+import logging
+
 import torchvision.transforms.functional as F
 import torchvision.transforms as transforms
+from torch.autograd import Variable
 import torch
-from model import transfer_style
+
+from array import array
+from io import BytesIO
+from PIL import Image
+import numpy as np
 import time
+import os
+import io
+
+from model_1 import transfer_style
+from model_2 import transform
 
 
 logging.basicConfig(
@@ -23,7 +28,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-MENU, SET_STAT, ABOUT, NEURO = range(4)
+MENU, SET_STAT, ABOUT, NEURO, NEURO_1, NEURO_PREP = range(6)
 
 
 def start(bot, update):
@@ -58,20 +63,95 @@ def set_state(bot, update):
         return neural_set(bot, update)
     elif update.message.text == "О боте":
         return about_bot(bot, update)
+    elif update.message.text == "Свои стили":
+        return model_01(bot, update)
+    elif update.message.text == "Готовые стили":
+        return model_02_prep(bot, update)
     else:
         return MENU
 		
+def model_01(bot, update):
+    """
+    Redirecting on first styling function
+    """
+    user = update.message.from_user
+    logger.info("First style requested by {}.".format(user.first_name))
+    update.message.reply_text(
+        "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект," \
+		"затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
+    return NEURO
+	
+def model_02_prep(bot, update):
+    required = ['Металл', 'Кубизм']
+    update.message.reply_text(
+        "Напиши стиль, который хочешь применить к изображению" \
+        "\n Доступные стили: {}".format(', '.join(required)))
+    return NEURO_PREP	
+	
+style = ''
+	
+def model_02(bot, update):
+    """
+    Redirecting on second styling function
+    """
+    user = update.message.from_user
+    logger.info("Second style requested by {}.".format(user.first_name))
+    global style
+    while style == None:
+        if update.message.text == "Металл":
+            style = "Металл"    
+        elif update.message.text == "Кубизм":
+            style = "Кубизм"
+        else:
+            update.message.reply_text("Нет такого стиля")
+    update.message.reply_text(
+        "Теперь отправь изображение, на которое наложится стиль.")
+    return NEURO_1
+		
+def choose_style(bot, update):
+    """
+    Main function of second style transfer. Takes content and style images and send result of transfer.
+    """
+    chat_id = update.message.chat_id
+    print("Got image from {}".format(chat_id))
 
+    image_info = update.message.photo[-1]
+    image_file = bot.get_file(image_info) 
+	
+    if chat_id in first_image_file:
+		
+        content_image_stream = BytesIO()
+        first_image_file[chat_id].download(out=content_image_stream)
+        del first_image_file[chat_id]
+		
+        global style
+        if style == "Металл":
+            update.message.reply_text("Подожди чуток")
+            output = transform(content_image_stream, style_image_stream)    
+        elif style == "Кубизм":
+            update.message.reply_text("Подожди чуток")
+            output = transform('/pretrained/cubism.pth', content_image_stream)
+			
+        output_stream = BytesIO()
+        output.save(output_stream, format='PNG')
+        output_stream.seek(0)
+        bot.send_photo(chat_id, photo=output_stream)
+        print("Sent Photo to user")
+
+        return MENU
+    else:
+        first_image_file[chat_id] = image_file
+        return NEURO_1
+    
 		
 first_image_file = {}
 
 def send_prediction_on_photo(bot, update):
     """
-    Main function of style transfer. Takes content and style images and send result of transfer.
+    Main function of first style transfer. Takes content and style images and send result of transfer.
     """
     chat_id = update.message.chat_id
     print("Got image from {}".format(chat_id))
-    start_time = time.time()
 
     image_info = update.message.photo[-1]
     image_file = bot.get_file(image_info) 
@@ -84,7 +164,7 @@ def send_prediction_on_photo(bot, update):
 
         style_image_stream = BytesIO()
         image_file.download(out=style_image_stream)
-        update.message.reply_text("Изображения получены. Подожди примерно 30 секунд.")
+        update.message.reply_text("Изображения получены. Подожди примерно минуту.")
 
         output = transfer_style(content_image_stream, style_image_stream)
 
@@ -93,8 +173,6 @@ def send_prediction_on_photo(bot, update):
         output_stream.seek(0)
         bot.send_photo(chat_id, photo=output_stream)
         print("Sent Photo to user")
-        end_time = time.time()
-        print('Elapsed time is: %f' % (end_time - start_time))
 
         return MENU
     else:
@@ -106,12 +184,16 @@ def neural_set(bot, update):
     """
     Redirecting on styling function
     """
+    keyboard = [["Свои стили", "Готовые стили"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard,
+                                       one_time_keyboard=True,
+                                       resize_keyboard=True)
     user = update.message.from_user
     logger.info("Neural style requested by {}.".format(user.first_name))
-    update.message.reply_text(
-        "Загрузи 2 картинки: сначала картинку, с которой нейросеть возьмет объект," \
-		"затем картинку, с которой нейросеть возьмет стиль и применит к первой картинке.")
-    return NEURO
+    update.message.reply_text('Каким образом ты хочешь наложить стиль на картинку?' \
+    '\n У каждого из методов есть отличие.' \
+    'Если не знаешь, чем они отличаются, то вызови /menu и зайди в раздел "О боте".', reply_markup=reply_markup)
+    return SET_STAT
 
 
 def about_bot(bot, update):
@@ -120,8 +202,20 @@ def about_bot(bot, update):
     """
     user = update.message.from_user
     logger.info("About info requested by {}.".format(user.first_name))
-    bot.send_message(chat_id=update.message.chat_id, text="Этот бот создан в рамках проектной работы в Deep learning school."\
-    "Для переноса стиля используется нейросеть VGG16. Для минимизации функции потерь Грэмиан матрицы применяется covariance vector")
+    bot.send_message(chat_id=update.message.chat_id, text=
+	"""
+	Методы переноса стиля: 
+    1. 'Свои стили'. 
+	Этот вариант дает возможность использовать свои изображения стиля. 
+    (Работает гораздо медленнее, нежели второй вариант. Вместе с тем, работает более качественно.)
+	2. 'Готовые стили'.
+	Этот вариант использует готовые стили. 
+	За несколько секунд перенесет стили, которые создатель посчитал интересными.
+	Список стилей и примеры работы можно найти на сайте: ###
+	
+    Этот бот создан в рамках проектной работы в Deep learning school.
+    Для переноса стиля используется нейросеть VGG16.
+	""")
     bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
     return MENU
 
@@ -165,7 +259,7 @@ def main():
     """
 
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://5.9.166.13:1080'})
+    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://50.3.74.178:32100'})
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -176,13 +270,21 @@ def main():
 
         states={
             MENU: [CommandHandler('menu', menu)],
+			
+			NEURO_PREP: [MessageHandler(Filters.text, model_02)],
 
             NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
+			
+            NEURO_1: [MessageHandler(Filters.photo, choose_style)],
 
             SET_STAT: [RegexHandler(
                 '^({}|{})$'.format(
                 "Нейросетевой перенос стиля", "О боте"),
-                set_state)]
+                set_state), 
+               RegexHandler(
+               '^({}|{})$'.format(
+               "Свои стили", "Готовые стили"),
+               set_state)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel),
