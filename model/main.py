@@ -89,7 +89,7 @@ def model_02_prep(bot, update):
     return NEURO_PREP	
 	
 style = ''
-	
+
 def model_02(bot, update):
     """
     Redirecting on second styling function
@@ -97,16 +97,17 @@ def model_02(bot, update):
     user = update.message.from_user
     logger.info("Second style requested by {}.".format(user.first_name))
     global style
-    while style == None:
-        if update.message.text == "Металл":
-            style = "Металл"    
-        elif update.message.text == "Кубизм":
-            style = "Кубизм"
-        else:
-            update.message.reply_text("Нет такого стиля")
+    if update.message.text == "Металл":
+        style = 'steel'
+    elif update.message.text == "Кубизм":
+        style = 'cubism'
+    else:
+        update.message.reply_text("Нет такого стиля")
     update.message.reply_text(
         "Теперь отправь изображение, на которое наложится стиль.")
     return NEURO_1
+	
+first_image_file = {}
 		
 def choose_style(bot, update):
     """
@@ -117,34 +118,25 @@ def choose_style(bot, update):
 
     image_info = update.message.photo[-1]
     image_file = bot.get_file(image_info) 
-	
-    if chat_id in first_image_file:
-		
-        content_image_stream = BytesIO()
-        first_image_file[chat_id].download(out=content_image_stream)
-        del first_image_file[chat_id]
-		
-        global style
-        if style == "Металл":
-            update.message.reply_text("Подожди чуток")
-            output = transform(content_image_stream, style_image_stream)    
-        elif style == "Кубизм":
-            update.message.reply_text("Подожди чуток")
-            output = transform('/pretrained/cubism.pth', content_image_stream)
-			
-        output_stream = BytesIO()
-        output.save(output_stream, format='PNG')
-        output_stream.seek(0)
-        bot.send_photo(chat_id, photo=output_stream)
-        print("Sent Photo to user")
 
-        return MENU
-    else:
-        first_image_file[chat_id] = image_file
-        return NEURO_1
-    
+    content_image_stream = BytesIO()
+    image_file.download(out=content_image_stream)
+	
+    if style == "steel":
+        update.message.reply_text("Подожди чуток")
+        output = transform('pretrained/steel.pth', style_image_stream)    
+    elif style == "cubism":
+        update.message.reply_text("Подожди чуток")
+        output = transform('pretrained/cubism.pth', content_image_stream)
 		
-first_image_file = {}
+    output_stream = BytesIO()
+    output.save(output_stream, format='PNG')
+    output_stream.seek(0)
+    bot.send_photo(chat_id, photo=output_stream)
+    print("Sent Photo to user")
+
+    return MENU
+
 
 def send_prediction_on_photo(bot, update):
     """
@@ -259,7 +251,7 @@ def main():
     """
 
     # Create the EventHandler and pass it your bot's token.
-    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://50.3.74.178:32100'})
+    updater = Updater(token, request_kwargs={'proxy_url': 'socks4://5.196.59.57:30248'})
 
     # Get the dispatcher to register handlers:
     dp = updater.dispatcher
@@ -275,7 +267,7 @@ def main():
 
             NEURO: [MessageHandler(Filters.photo, send_prediction_on_photo)],
 			
-            NEURO_1: [MessageHandler(Filters.photo, choose_style)],
+            NEURO_1: [MessageHandler((Filters.photo | Filters.text), choose_style)],
 
             SET_STAT: [RegexHandler(
                 '^({}|{})$'.format(
