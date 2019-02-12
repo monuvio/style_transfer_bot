@@ -111,7 +111,7 @@ def postp(tensor):
 	return postpb(postpa(tensor).clamp(0.0, 1.0))
 
 vgg = VGG()
-vgg.load_state_dict(torch.load('weights.pth'))
+vgg.load_state_dict(torch.load('/content/weights.pth'))
 for param in vgg.parameters():
 	param.requires_grad = False
 if torch.cuda.is_available():
@@ -120,12 +120,14 @@ if torch.cuda.is_available():
 style_layers = ['r11', 'r21', 'r31', 'r41', 'r51'] 
 content_layers = ['r32', 'r42']
 loss_layers = style_layers + content_layers
-style_weights = [1e3] * len(style_layers)
+style_weights = [1.2e3] * len(style_layers)
 content_weights = [1e0] * len(content_layers)
 weights = style_weights + content_weights
-n_iter = 0
 
 activationShift = 0.0
+
+n_iter = 0
+
 def transfer_style(content_img, style_img):
     imgs_torch = [prep(Image.open(style_img).convert('RGB')), prep(Image.open(content_img).convert('RGB'))]
     if torch.cuda.is_available():
@@ -148,9 +150,9 @@ def transfer_style(content_img, style_img):
     style_targets, content_targets = None, None
 
     optimizer = optim.LBFGS([opt_img])
-    max_iter = 500
+    max_iter = 400
     show_iter = 100
-    ITER = 0
+    global n_iter
 	
     def closure():
         optimizer.zero_grad()
@@ -158,10 +160,13 @@ def transfer_style(content_img, style_img):
         layer_losses = [weights[a] * loss_fns[a](A) for a, A in enumerate(out)]
         loss = sum(layer_losses)
         loss.backward()
-        ITER += 1
+        global n_iter
+        if n_iter % show_iter == 0:
+            print('Iteration:', n_iter)
+        n_iter += 1
         return loss
 
-    while ITER < max_iter:
+    while n_iter < max_iter:
         optimizer.step(closure)
 		
     out_img = postp(opt_img.data[0].cpu().squeeze())

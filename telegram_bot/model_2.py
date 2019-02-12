@@ -86,6 +86,7 @@ def load_and_preprocess(image_file, size):
     img_tensor = transform(img).unsqueeze(0)
     return img_tensor
 
+size = 384
 
 def transform(model_file, image_file):
     transformer = load_model(model_file)

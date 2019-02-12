@@ -2,16 +2,8 @@
 
 telegram_bot/telegram_token.py
 
-
-model/telegram_token.py
-Guide.ipynb
-cmd.bat
-
 telegram_bot/weights.pth
-
-
-model/weights.pth
-model/pretrained
+telegram_bot/pretrained/
 **/.idea
 
 **/__pycache__
