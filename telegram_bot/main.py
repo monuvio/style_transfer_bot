@@ -106,6 +106,7 @@ def model_02(bot, update):
         style = 'cubism'
     else:
         update.message.reply_text("Нет такого стиля")
+        return NEURO_PREP
     update.message.reply_text(
         "Теперь отправь изображение, на которое наложится стиль.")
     return NEURO_1
@@ -184,16 +185,33 @@ def neural_set(bot, update):
     logger.info("Neural style requested by {}.".format(user.first_name))
     update.message.reply_text('Каким образом ты хочешь наложить стиль на картинку?' \
     '\n У каждого из методов есть отличие.' \
-    'Если не знаешь, чем они отличаются, то вызови /menu и зайди в раздел "О боте".', reply_markup=reply_markup)
+    'Если не знаешь, чем они отличаются, то вызови /styles.', reply_markup=reply_markup)
     return SET_STAT
 
 
 def about_bot(bot, update):
     """
-    About function. Displays info about Style Transfer Bot.
+    About bot. Displays info about Style Transfer Bot and his creator.
     """
     user = update.message.from_user
-    logger.info("About info requested by {}.".format(user.first_name))
+    logger.info("About bot info requested by {}.".format(user.first_name))
+    bot.send_message(chat_id=update.message.chat_id, text=
+    """
+    Сайт бота: ###
+	Github разработчика: ###
+	Сайт разработчика: ###
+	
+    Этот бот создан в рамках проектной работы в Deep learning school.
+    """)
+    bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
+    return MENU
+	
+def about_style(bot, update):
+    """
+    Displays info about style difference. 
+    """
+    user = update.message.from_user
+    logger.info("About styles info requested by {}.".format(user.first_name))
     bot.send_message(chat_id=update.message.chat_id, text=
     """
     Методы переноса стиля: 
@@ -204,10 +222,7 @@ def about_bot(bot, update):
     Этот вариант использует готовые стили. 
     За несколько секунд перенесет стили, которые создатель посчитал интересными.
     Список стилей и примеры работы можно найти на сайте: ###
-    
-    Этот бот создан в рамках проектной работы в Deep learning school.
     """)
-    bot.send_message(chat_id=update.message.chat_id, text="Ты можешь вернуться обратно в меню с помощью команды /menu.")
     return MENU
 
 
@@ -279,6 +294,8 @@ def main():
         },
 
         fallbacks=[CommandHandler('cancel', cancel),
+                   CommandHandler('menu', menu),
+				   CommandHandler('styles', about_style),
                    CommandHandler('help', help)],
                    
         conversation_timeout = 900.0
